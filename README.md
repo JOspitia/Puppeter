@@ -159,13 +159,15 @@ registro (carga de página y formulario).
 
 | Suite | Qué cubre | Estado |
 |---|---|---|
-| `__tests__/navedaor.test.js` | abrir/cerrar navegador, `goBack`/`goForward`, pestañas | funciona |
-| `__tests__/interactuandoConElementos.test.js` | click derecho, doble click, escritura, checkbox, radio, `select` | funciona |
-| `__tests__/autoESET.test.js` | flujo completo de ESET de punta a punta | funciona |
-| `__tests__/autoESETtemp.test.js` | versión antigua del flujo de ESET | **obsoleta** |
-| `autoESETtemp.test.js` (raíz) | copia de la versión antigua | **obsoleta** |
+| `__tests__/navedaor.test.js` | abrir/cerrar navegador, `goBack`/`goForward`, pestañas | ⚠️ excede su timeout de 40 s (visita 3 sitios externos con `slowMo: 300`) |
+| `__tests__/interactuandoConElementos.test.js` | click derecho, doble click, escritura, checkbox, radio, `select` | ⚠️ `demo.guru99.com` devuelve "Navigating frame was detached" |
+| `__tests__/autoESET.test.js` | flujo completo de ESET de punta a punta | ✅ pasa (~77 s) |
+| `__tests__/autoESETtemp.test.js` | versión antigua del flujo de ESET | ❌ obsoleta (selectores `css-xxxx`) |
+| `autoESETtemp.test.js` (raíz) | copia de la versión antigua | ❌ obsoleta (selectores `css-xxxx`) |
 
-Las dos últimas usan los selectores `css-xxxx` antigos, por lo que fallan contra la web actual.
+Las dos últimas son la versión previa del flujo de ESET y ya no funcionan contra la web actual.
+Las dos del medio son ejercicios de práctica sobre sitios externos: dependen de que esas páginas
+sigan disponibles con los mismos selectores, así que son frágiles por naturaleza.
 Para ejecutar solo la suite que sí funciona:
 
 ```bash
@@ -222,18 +224,50 @@ Funciones exportadas por separado: `crearMailboxMailTm`, `crearMailboxTempMailOr
 
 ### `Failed to launch the browser process: Code: 2147483651` / `Invalid file descriptor to ICU data`
 
-La descarga del Chromium de Puppeteer quedó incompleta (faltan `icudtl.dat` y los blobs de V8).
-No es problema del código: basta usar el Chrome del sistema.
+La descarga del Chromium de Puppeteer quedó incompleta: faltan `icudtl.dat`, `resources.pak` y
+los blobs de V8, así que Chrome no arranca.
+
+**Opción rápida** — usar el Chrome del sistema solo para el flujo de ESET:
 
 ```bash
 $env:ESET_CHROME_PATH = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 ```
 
-Para rehacer la descarga:
+**Opción completa** — reparar el Chromium para que funcionen *todas* las suites. Ojo: en algunas
+máquinas `npx puppeteer browsers install chrome` **falla en silencio** (imprime la ruta pero deja
+la instalación a medias, sin el marcador `INSTALLATION_COMPLETE`). La forma fiable es descargar y
+extraer el ZIP a mano:
 
 ```bash
-npx puppeteer browsers install chrome
+# 1. Descargar Chrome for Testing (la versión que pida tu Puppeteer)
+curl.exe -sSL -o chrome-win64.zip \
+  "https://storage.googleapis.com/chrome-for-testing-public/150.0.7871.24/win64/chrome-win64.zip"
+
+# 2. Extraer
+Expand-Archive -Path chrome-win64.zip -DestinationPath ./chrome-out -Force
+
+# 3. Reemplazar la instalación rota y marcarla como completa
+$cache = "$env:USERPROFILE\.cache\puppeteer\chrome\win64-150.0.7871.24"
+Remove-Item "$cache\chrome-win64" -Recurse -Force
+Copy-Item .\chrome-out\chrome-win64 "$cache\chrome-win64" -Recurse -Force
+New-Item -ItemType File -Path "$cache\chrome-win64\INSTALLATION_COMPLETE" -Force
 ```
+
+Verifica que quedaron los archivos críticos: `icudtl.dat`, `resources.pak` y
+`v8_context_snapshot.bin`.
+
+### npm no arranca (`Cannot find module '../../package.json'`)
+
+Instalación global de npm corrupta: le falta el `package.json` raíz. Suele pasar al actualizar
+Node o al hacer `npm install -g npm` con una versión de Node incompatible.
+
+```bash
+# Reinstalar npm usando el que trae Node
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" install -g npm@11
+```
+
+Comprueba antes tu versión de Node: `npm@12` exige Node **>= 24.15**, así que con Node 24.12
+hay que instalar la rama `npm@11`.
 
 ### temp-mail.org devuelve HTTP 429
 
